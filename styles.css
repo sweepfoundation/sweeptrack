@@ -3,7 +3,7 @@
 body{margin:0;font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);-webkit-tap-highlight-color:transparent}
 main{max-width:720px;margin:0 auto;padding:0 12px calc(96px + env(safe-area-inset-bottom))}
 button,input,select{font:inherit}
-input{width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:#fff;color:var(--tx)}
+input,select{width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:#fff;color:var(--tx)}
 input:focus,button:focus-visible{outline:3px solid #9bd6bb;outline-offset:1px}
 label{display:block;font-size:14px;color:var(--mu);margin:12px 0 4px}
 button{min-height:48px;padding:0 16px;border:1px solid var(--bd);border-radius:10px;background:#fff;color:var(--tx);cursor:pointer}
@@ -45,3 +45,19 @@ dt{color:var(--mu)}dd{margin:0;word-break:break-word}
 hr{border:0;border-top:1px solid var(--bd);margin:16px 0}
 #toast{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:696px;margin:0 auto;padding:12px 14px;border-radius:10px;background:#14201a;color:#fff;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
 #toast.show{opacity:1}#toast.bad{background:var(--err)}
+.pw{position:relative}
+.pw input{padding-right:72px}
+.pw .eye{position:absolute;right:4px;top:4px;min-height:40px;padding:0 12px;border:0;background:transparent;color:var(--g);font-weight:600}
+.sub2{font-size:13px;color:var(--mu)}
+.link{border:0;background:none;color:var(--g);min-height:44px;width:100%;margin-top:8px}
+.login h2{font-size:18px;margin:12px 0 0}
+select{margin-bottom:8px}
+.chips{flex-wrap:wrap}
+.chips.wrap button{min-height:44px;min-width:64px;font-weight:600}
+.chips button.on{background:var(--g);border-color:var(--g);color:#fff}
+.wrow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.wrow span{width:64px;font-weight:600}
+.wrow input{flex:1}
+.wrow em{font-style:normal;color:var(--mu)}
+.total{display:flex;justify-content:space-between;margin-top:10px;padding:10px 12px;border-radius:10px;background:#e7f3ed;color:var(--gd);font-weight:700}
+.total[hidden]{display:none}
