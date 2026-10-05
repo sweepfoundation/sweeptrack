@@ -22,7 +22,7 @@ function toast(msg, bad = false) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 6000 : 2500);
 }
 const fmtKg = (m) => { const f = String(m % 1000).padStart(3, '0').replace(/0+$/, ''); return Math.floor(m / 1000).toLocaleString('en-NG') + (f ? '.' + f : ''); };
-const fmtNaira = (k) => 'â‚¦' + Math.floor(k / 100).toLocaleString('en-NG') + (k % 100 ? '.' + String(k % 100).padStart(2, '0') : '');
+const fmtNaira = (k) => '₦' + Math.floor(k / 100).toLocaleString('en-NG') + (k % 100 ? '.' + String(k % 100).padStart(2, '0') : '');
 const fmtDate = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const fmtStamp = (s) => new Date(s).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const shiftDate = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -165,9 +165,9 @@ function renderFilters() {
   if (state.mode === 'day') {
     const input = h('input', { type: 'date', value: state.date, 'aria-label': 'Selected date', onchange: (e) => { if (e.target.value) { state.date = e.target.value; refresh(); } } });
     filtersEl.replaceChildren(h('div', { class: 'row' },
-      h('button', { class: 'fit', 'aria-label': 'Previous day', onclick: () => { state.date = shiftDate(state.date, -1); input.value = state.date; refresh(); } }, 'â€¹'),
+      h('button', { class: 'fit', 'aria-label': 'Previous day', onclick: () => { state.date = shiftDate(state.date, -1); input.value = state.date; refresh(); } }, '‹'),
       input,
-      h('button', { class: 'fit', 'aria-label': 'Next day', onclick: () => { state.date = shiftDate(state.date, 1); input.value = state.date; refresh(); } }, 'â€º')));
+      h('button', { class: 'fit', 'aria-label': 'Next day', onclick: () => { state.date = shiftDate(state.date, 1); input.value = state.date; refresh(); } }, '›')));
   } else if (state.mode === 'range') filtersEl.replaceChildren(h('div', { class: 'row' }, date('from', 'From'), date('to', 'To')));
   else filtersEl.replaceChildren();
 }
@@ -194,8 +194,8 @@ async function loadList(append) {
 }
 const card = (r) => h('button', { class: 'card', onclick: () => openDetail(r) },
   h('div', { class: 'top' }, h('span', {}, r.customer_name), h('span', {}, fmtNaira(r.amount_kobo))),
-  h('div', { class: 'sub' }, `${fmtDate(r.date)}  Â·  ${fmtKg(r.kg_milli)} kg`),
-  r.items.length ? h('div', { class: 'sub' }, r.items.map((i) => `${i.type} ${fmtKg(i.kg_milli)}`).join('  Â·  ')) : null,
+  h('div', { class: 'sub' }, `${fmtDate(r.date)}  ·  ${fmtKg(r.kg_milli)} kg`),
+  r.items.length ? h('div', { class: 'sub' }, r.items.map((i) => `${i.type} ${fmtKg(i.kg_milli)}`).join('  ·  ')) : null,
   r.remark ? h('span', { class: 'pill' + (isPending(r.remark) ? ' pending' : '') }, r.remark) : null);
 
 // ---------- dialogs ----------
@@ -285,7 +285,7 @@ function openForm(r) {
     h('h2', {}, r ? 'Edit Record' : 'New Record'),
     h('label', {}, 'Date'), date, h('label', {}, 'Customer name'), name,
     h('label', {}, 'Plastic type'), chipsEl, hint, weightsEl, totalEl, legacyBox,
-    h('label', {}, 'Amount (â‚¦)'), amount,
+    h('label', {}, 'Amount (₦)'), amount,
     h('label', {}, 'Remark'), remark,
     h('div', { class: 'chips' }, ...['Paid', 'Pending', 'Collected'].map((t) => h('button', { type: 'button', onclick: () => (remark.value = t) }, t))),
     err, h('div', { class: 'actions' }, h('button', { type: 'button', onclick: () => d.close() }, 'Cancel'), btn)));
