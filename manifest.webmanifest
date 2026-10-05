@@ -1,6 +1,6 @@
 {
   "name": "SweepTrack",
-  "short_name": "Sweep",
+  "short_name": "SweepTrack",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
