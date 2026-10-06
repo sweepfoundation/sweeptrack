@@ -61,3 +61,20 @@ select{margin-bottom:8px}
 .wrow em{font-style:normal;color:var(--mu)}
 .total{display:flex;justify-content:space-between;margin-top:10px;padding:10px 12px;border-radius:10px;background:#e7f3ed;color:var(--gd);font-weight:700}
 .total[hidden]{display:none}
+
+.barbtns{display:flex;gap:8px}
+.barbtns button{min-height:40px;padding:0 12px}
+.row.more{margin-top:8px}
+.row.more button[hidden]{display:none}
+.crow{border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin-top:8px}
+.crow .top{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.crow label{margin:6px 0 4px}
+.crow .sub{color:var(--mu);font-size:14px;margin-top:6px}
+input.bad{border-color:var(--err)}
+.card .sub.clip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dd a{color:var(--g);font-weight:600}
+.calctoggle{width:100%;margin-top:12px}
+.calcbox{border:1px solid var(--bd);border-radius:12px;padding:10px;margin-top:8px;background:#fafcfb}
+.calcbox .hint{margin-top:6px}
+.calcbox .actions button{white-space:nowrap}
+.calcbox .actions button:first-child{flex:0 0 32%}
