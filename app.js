@@ -24,7 +24,7 @@ function toast(msg, bad = false) {
 const fmtKg = (m) => { const f = String(m % 1000).padStart(3, '0').replace(/0+$/, ''); return Math.floor(m / 1000).toLocaleString('en-NG') + (f ? '.' + f : ''); };
 const fmtNaira = (k) => '₦' + Math.floor(k / 100).toLocaleString('en-NG') + (k % 100 ? '.' + String(k % 100).padStart(2, '0') : '');
 const fmtDate = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const fmtStamp = (s) => new Date(s).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fmtStamp = (s) => !s || isNaN(new Date(s)) ? '-' : new Date(s).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const shiftDate = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 const isPending = (r) => /pending/i.test(r);
 
@@ -140,20 +140,21 @@ function showReset() {
 }
 
 // ---------- dashboard ----------
-let statsEl, listEl, moreEl, scopeEl, filtersEl;
+let statsEl, listEl, moreEl, lessEl, scopeEl, filtersEl;
 
 async function showApp() {
   const search = h('input', { type: 'search', placeholder: 'Search customer name', value: state.q, 'aria-label': 'Search customer name' });
   let t; search.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { state.q = search.value.trim(); refresh(); }, 300); });
   statsEl = h('div', { class: 'stats' }); listEl = h('div'); moreEl = h('button', { onclick: () => loadList(true) }, 'Click to view more');
+  lessEl = h('button', { onclick: showLess, hidden: true }, 'Show less');
   scopeEl = h('div', { class: 'hint' }); filtersEl = h('div');
   app.replaceChildren(
-    h('div', { class: 'bar' }, h('div', {}, h('h1', {}, 'SweepTrack'), h('div', { class: 'sub2' }, 'Sweep Foundation Record')), h('button', { class: 'fit', onclick: openSettings, 'aria-label': 'Settings' }, 'Settings')),
+    h('div', { class: 'bar' }, h('div', {}, h('h1', {}, 'SweepTrack'), h('div', { class: 'sub2' }, 'Sweep Foundation Record')), h('div', { class: 'barbtns' }, h('button', { class: 'fit', onclick: openCalculator, 'aria-label': 'Open calculator' }, 'Calculator'), h('button', { class: 'fit', onclick: openSettings, 'aria-label': 'Settings' }, 'Settings'))),
     h('div', { class: 'row tabs' }, ...[['recent', 'Recent'], ['day', 'Day'], ['range', 'Range'], ['all', 'All']].map(([m, l]) =>
       h('button', { class: state.mode === m ? 'on' : '', 'data-mode': m, onclick: () => { state.mode = m; renderFilters(); refresh(); } }, l))),
     filtersEl, statsEl,
     h('div', { class: 'row' }, search, h('button', { class: 'fit', onclick: () => exportCsv(filterParams()) }, 'Export CSV')),
-    scopeEl, listEl, moreEl,
+    scopeEl, listEl, h('div', { class: 'row more' }, moreEl, lessEl),
     h('button', { class: 'primary fab', onclick: () => openForm() }, '+ Add Record'));
   renderFilters(); await refresh();
 }
@@ -178,24 +179,51 @@ async function refresh() {
     const [s] = await Promise.all([api('/api/summary?' + summaryParams()), loadList(false)]);
     const label = (state.mode === 'recent' && !state.q) || (state.mode === 'day' && state.date === today()) ? "Today's records" : 'Records';
     statsEl.replaceChildren(
-      stat(label, s.count), stat('Total KG', fmtKg(s.kg_milli)), stat('Total amount', fmtNaira(s.amount_kobo)), stat('Pending', s.pending, 'pend'));
+      stat(label, num(s.count)), stat('Total KG', fmtKg(num(s.kg_milli))), stat('Total amount', fmtNaira(num(s.amount_kobo))), stat('Pending', num(s.pending), 'pend'));
   } catch (e) { toast(e.message, true); }
 }
 const stat = (label, value, cls = '') => h('div', { class: 'stat ' + cls }, h('span', {}, label), h('b', {}, String(value)));
 
+const PAGE = 10;
+// Older records (saved before plastic types existed) can come back without items, or with null fields.
+// Normalising once here keeps every screen safe: card, detail, edit form, totals.
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+function normRecord(r) {
+  const items = (Array.isArray(r.items) ? r.items : []).filter((i) => i && i.type).map((i) => ({ ...i, kg_milli: num(i.kg_milli) }));
+  return { ...r, items, kg_milli: num(r.kg_milli), amount_kobo: num(r.amount_kobo), customer_name: r.customer_name || '', remark: r.remark || '', address: r.address || '', phone: r.phone || '' };
+}
+// Effective price per KG = amount paid / KG collected, in kobo. Null when it cannot be stated truthfully.
+const ratePerKg = (kgMilli, amountKobo) => (kgMilli > 0 && amountKobo > 0 ? Math.round(amountKobo * 1000 / kgMilli) : null);
+const fmtRate = (kobo) => (kobo == null ? '-' : fmtNaira(kobo) + ' per KG');
 async function loadList(append) {
-  const p = filterParams(); p.set('limit', '10');
+  const p = filterParams(); p.set('limit', String(PAGE));
   if (append && state.cursor) p.set('cursor', state.cursor);
   const data = await api('/api/records?' + p);
-  state.records = append ? state.records.concat(data.records) : data.records;
-  state.cursor = data.next_cursor;
+  const incoming = (Array.isArray(data && data.records) ? data.records : []).filter((r) => r && typeof r === 'object').map(normRecord);
+  state.records = append ? state.records.concat(incoming) : incoming;
+  state.cursor = (data && data.next_cursor) || null;
+  if (!append) state.firstCursor = state.cursor; // lets Show less return to the first page without refetching
+  renderList();
+}
+function renderList() {
   listEl.replaceChildren(...(state.records.length ? state.records.map(card) : [h('div', { class: 'empty' }, 'No records found.')]));
   moreEl.hidden = !state.cursor;
+  lessEl.hidden = state.records.length <= PAGE;
+}
+function showLess() {
+  state.records = state.records.slice(0, PAGE); state.cursor = state.firstCursor;
+  renderList(); listEl.scrollIntoView({ block: 'start' });
+}
+function cardRate(r) {
+  const k = ratePerKg(r.kg_milli, r.amount_kobo);
+  return k == null ? '' : (r.items.length > 1 ? 'Overall ' : '') + fmtNaira(k) + ' per KG';
 }
 const card = (r) => h('button', { class: 'card', onclick: () => openDetail(r) },
   h('div', { class: 'top' }, h('span', {}, r.customer_name), h('span', {}, fmtNaira(r.amount_kobo))),
   h('div', { class: 'sub' }, `${fmtDate(r.date)}  ·  ${fmtKg(r.kg_milli)} kg`),
   r.items.length ? h('div', { class: 'sub' }, r.items.map((i) => `${i.type} ${fmtKg(i.kg_milli)}`).join('  ·  ')) : null,
+  cardRate(r) ? h('div', { class: 'sub' }, cardRate(r)) : null,
+  r.phone || r.address ? h('div', { class: 'sub clip' }, [r.phone, r.address].filter(Boolean).join('  ·  ')) : null,
   r.remark ? h('span', { class: 'pill' + (isPending(r.remark) ? ' pending' : '') }, r.remark) : null);
 
 // ---------- dialogs ----------
@@ -210,9 +238,13 @@ const plainKg = (m) => String(m / 1000);
 function openDetail(r) {
   const d = dialog(
     h('h2', {}, r.customer_name),
-    h('dl', {}, h('dt', {}, 'Date'), h('dd', {}, fmtDate(r.date)), h('dt', {}, 'Total KG'), h('dd', {}, fmtKg(r.kg_milli)),
+    h('dl', {}, h('dt', {}, 'Date'), h('dd', {}, fmtDate(r.date)),
+      h('dt', {}, 'Phone No'), h('dd', {}, r.phone ? (/^[+\d][\d\s().\-]*$/.test(r.phone) ? h('a', { href: 'tel:' + r.phone.replace(/[^\d+]/g, '') }, r.phone) : r.phone) : '-'),
+      h('dt', {}, 'Address'), h('dd', {}, r.address || '-'), h('dt', {}, 'Total KG'), h('dd', {}, fmtKg(r.kg_milli)),
       h('dt', {}, 'Plastic'), h('dd', {}, r.items.length ? r.items.map((i) => h('div', {}, `${i.type}: ${fmtKg(i.kg_milli)} kg`)) : '-'),
-      h('dt', {}, 'Amount'), h('dd', {}, fmtNaira(r.amount_kobo)), h('dt', {}, 'Remark'), h('dd', {}, r.remark || '-'),
+      h('dt', {}, 'Amount'), h('dd', {}, fmtNaira(r.amount_kobo)),
+      h('dt', {}, r.items.length > 1 ? 'Overall price' : 'Price'), h('dd', {}, fmtRate(ratePerKg(r.kg_milli, r.amount_kobo)) + (r.items.length > 1 ? ' (all types combined, not a rate per type)' : '')),
+      h('dt', {}, 'Remark'), h('dd', {}, r.remark || '-'),
       h('dt', {}, 'Created'), h('dd', {}, fmtStamp(r.created_at)), h('dt', {}, 'Updated'), h('dd', {}, fmtStamp(r.updated_at))),
     h('div', { class: 'err', id: 'derr' }),
     h('div', { class: 'actions' },
@@ -235,13 +267,29 @@ function openForm(r) {
   const name = h('input', { required: true, maxlength: 120, autocomplete: 'off', value: r ? r.customer_name : '' });
   const amount = h('input', { required: true, inputmode: 'decimal', autocomplete: 'off', placeholder: '0', value: r ? plain(r.amount_kobo) : '' });
   const remark = h('input', { maxlength: 500, autocomplete: 'off', value: r ? r.remark : '' });
+  const phone = h('input', { type: 'tel', inputmode: 'tel', maxlength: 30, autocomplete: 'off', placeholder: 'Optional', value: r ? r.phone : '' });
+  const address = h('input', { maxlength: 300, autocomplete: 'off', placeholder: 'Optional', value: r ? r.address : '' });
   const legacy = !!r && r.items.length === 0; // saved before plastic types existed: keeps its single KG until types are chosen
   const legacyKg = h('input', { inputmode: 'decimal', autocomplete: 'off', placeholder: '0', value: legacy ? plainKg(r.kg_milli) : '' });
   const inputs = new Map(); // type -> weight input, kept while toggling
   const chosen = new Set(r ? r.items.map((i) => i.type) : []);
   if (r) r.items.forEach((i) => inputs.set(i.type, h('input', { inputmode: 'decimal', autocomplete: 'off', placeholder: '0', 'aria-label': i.type + ' KG', value: plainKg(i.kg_milli) })));
   const chipsEl = h('div', { class: 'chips wrap' }), weightsEl = h('div'), totalEl = h('div', { class: 'total' });
-  const err = h('div', { class: 'err' });
+  const err = h('div', { class: 'err' }), rateEl = h('div', { class: 'hint rate' });
+  const calcNote = h('div', { class: 'hint' });
+  const panel = calcPanel({ onUse: ({ items, amountKobo }) => { // fill the record from the calculator result
+    chosen.clear();
+    items.forEach((i) => { chosen.add(i.type); if (!inputs.has(i.type)) inputs.set(i.type, h('input', { inputmode: 'decimal', autocomplete: 'off', placeholder: '0', 'aria-label': i.type + ' KG' })); inputs.get(i.type).value = i.kg; });
+    amount.value = plain(amountKobo); paint();
+    calcBox.hidden = true; calcToggle.setAttribute('aria-expanded', 'false'); calcToggle.textContent = 'Calculator';
+    calcNote.textContent = 'Added from the calculator: plastic types, KG and amount. Complete the rest and save.';
+  } });
+  const calcBox = h('div', { class: 'calcbox', hidden: true }, panel.node);
+  const calcToggle = h('button', { type: 'button', class: 'calctoggle', 'aria-expanded': 'false', onclick: () => {
+    const open = calcBox.hidden; calcBox.hidden = !open; calcNote.textContent = '';
+    calcToggle.setAttribute('aria-expanded', String(open)); calcToggle.textContent = open ? 'Hide calculator' : 'Calculator';
+    if (open) panel.seed([...chosen].filter((t) => inputs.has(t)).map((t) => ({ type: t, kg: inputs.get(t).value })));
+  } }, 'Calculator');
 
   function total() { let sum = 0; for (const t of chosen) sum += toMilli(inputs.get(t).value) || 0; return sum; }
   function paint() {
@@ -256,7 +304,13 @@ function openForm(r) {
     hint.hidden = rows.length > 0 || legacy;
     showTotal();
   }
-  function showTotal() { totalEl.replaceChildren(h('span', {}, 'Total KG'), h('span', {}, fmtKg(total()))); }
+  function showTotal() { totalEl.replaceChildren(h('span', {}, 'Total KG'), h('span', {}, fmtKg(total()))); showRate(); }
+  function showRate() { // effective price from the entered KG and amount; never a per type rate
+    const kg = chosen.size ? total() : (legacy ? toMilli(legacyKg.value) || 0 : 0), a = toKobo(amount.value) || 0, k = ratePerKg(kg, a);
+    rateEl.textContent = k == null ? 'Price per KG appears once KG and amount are entered.'
+      : (chosen.size > 1 ? `Overall price: ${fmtNaira(k)} per KG across all types (not a rate per type)` : `Price: ${fmtNaira(k)} per KG`);
+  }
+  amount.addEventListener('input', showRate); legacyKg.addEventListener('input', showRate);
   weightsEl.addEventListener('input', showTotal);
   const hint = h('div', { class: 'hint' }, 'Tap one or more plastic types, then enter the KG for each.');
   const legacyBox = h('div', { hidden: true }, h('label', {}, 'KG (no plastic type recorded)'), legacyKg);
@@ -264,7 +318,7 @@ function openForm(r) {
   const btn = h('button', { class: 'primary', type: 'submit' }, r ? 'Save changes' : 'Save Record');
   const d = dialog(h('form', { onsubmit: async (e) => {
     e.preventDefault(); err.textContent = '';
-    const body = { date: date.value, customer_name: name.value, amount: amount.value, remark: remark.value, items: [] };
+    const body = { date: date.value, customer_name: name.value, phone: phone.value, address: address.value, amount: amount.value, remark: remark.value, items: [] };
     if (chosen.size) {
       for (const t of PLASTICS.filter((x) => chosen.has(x))) {
         const m = toMilli(inputs.get(t).value);
@@ -284,8 +338,10 @@ function openForm(r) {
   } },
     h('h2', {}, r ? 'Edit Record' : 'New Record'),
     h('label', {}, 'Date'), date, h('label', {}, 'Customer name'), name,
+    h('label', {}, 'Phone No'), phone, h('label', {}, 'Address'), address,
+    calcToggle, calcNote, calcBox,
     h('label', {}, 'Plastic type'), chipsEl, hint, weightsEl, totalEl, legacyBox,
-    h('label', {}, 'Amount (₦)'), amount,
+    h('label', {}, 'Amount (₦)'), amount, rateEl,
     h('label', {}, 'Remark'), remark,
     h('div', { class: 'chips' }, ...['Paid', 'Pending', 'Collected'].map((t) => h('button', { type: 'button', onclick: () => (remark.value = t) }, t))),
     err, h('div', { class: 'actions' }, h('button', { type: 'button', onclick: () => d.close() }, 'Cancel'), btn)));
@@ -293,6 +349,94 @@ function openForm(r) {
   if (!r) name.focus();
 }
 
+// ---------- calculator: manual tool only, nothing here is ever saved as a record ----------
+const toKobo = (v) => { const t = String(v).trim().replace(/,/g, ''); if (!/^\d{1,9}(\.\d{1,2})?$/.test(t)) return null; const [i, f = ''] = t.split('.'); return Number(i) * 100 + Number(f.padEnd(2, '0')); };
+const RATES_KEY = 'sweeptrack-calc-rates'; // rates are remembered on this device only
+function loadRates() {
+  try { const o = JSON.parse(localStorage.getItem(RATES_KEY)) || {}; return Object.fromEntries(PLASTICS.filter((t) => typeof o[t] === 'string' && toKobo(o[t]) !== null).map((t) => [t, o[t]])); }
+  catch { return {}; }
+}
+// The calculator as a reusable panel: used inside the Add/Edit Record form and in the standalone dialog.
+// It never saves anything. When onUse is given, "Use in record" hands the result to the form.
+function calcPanel({ onUse } = {}) {
+  const rates = loadRates(), chosen = new Set(), rows = new Map();
+  const chipsEl = h('div', { class: 'chips wrap' }), rowsEl = h('div');
+  const kgTotal = h('span', {}, '0 kg'), amtTotal = h('span', {}, '₦0'), msg = h('div', { class: 'err' });
+  const hint = h('div', { class: 'hint' }, 'Tap one or more plastic types, then enter the KG and the rate per KG.');
+  const totals = h('div', { hidden: true }, h('div', { class: 'total' }, h('span', {}, 'Total KG'), kgTotal), h('div', { class: 'total' }, h('span', {}, 'Total amount'), amtTotal));
+
+  function rowFor(t) {
+    if (rows.has(t)) return rows.get(t);
+    const kg = h('input', { inputmode: 'decimal', autocomplete: 'off', placeholder: '0', 'aria-label': 'Calculator ' + t + ' KG' });
+    const rate = h('input', { inputmode: 'decimal', autocomplete: 'off', placeholder: '0', 'aria-label': 'Calculator ' + t + ' rate per KG', value: rates[t] || '' });
+    const amt = h('b', {}, '₦0'), line = h('div', { class: 'sub' }, '');
+    const node = h('div', { class: 'crow' },
+      h('div', { class: 'top' }, h('span', {}, t), amt),
+      h('div', { class: 'row' }, h('div', {}, h('label', {}, 'KG'), kg), h('div', {}, h('label', {}, 'Rate per KG (₦)'), rate)), line);
+    rate.addEventListener('input', () => {
+      const v = rate.value.trim();
+      if (v === '') delete rates[t]; else if (toKobo(v) !== null) rates[t] = v;
+      try { localStorage.setItem(RATES_KEY, JSON.stringify(rates)); } catch {}
+    });
+    const r = { kg, rate, amt, line, node };
+    rows.set(t, r); return r;
+  }
+  function calc() {
+    let kgSum = 0, amtSum = 0;
+    for (const t of chosen) {
+      const r = rows.get(t), mk = toMilli(r.kg.value), kk = toKobo(r.rate.value);
+      r.kg.classList.toggle('bad', r.kg.value.trim() !== '' && mk === null);
+      r.rate.classList.toggle('bad', r.rate.value.trim() !== '' && kk === null);
+      const m = mk || 0, k = kk || 0, a = Math.round(m * k / 1000);
+      r.amt.textContent = fmtNaira(a);
+      r.line.textContent = `${fmtKg(m)} kg × ${fmtNaira(k)} = ${fmtNaira(a)}`;
+      kgSum += m; amtSum += a;
+    }
+    kgTotal.textContent = fmtKg(kgSum) + ' kg'; amtTotal.textContent = fmtNaira(amtSum);
+  }
+  function paint() {
+    chipsEl.replaceChildren(...PLASTICS.map((t) => h('button', { type: 'button', class: chosen.has(t) ? 'on' : '', 'aria-pressed': String(chosen.has(t)), onclick: () => {
+      if (chosen.has(t)) chosen.delete(t); else chosen.add(t);
+      msg.textContent = ''; paint(); if (chosen.has(t)) rowFor(t).kg.focus();
+    } }, t)));
+    rowsEl.replaceChildren(...PLASTICS.filter((t) => chosen.has(t)).map((t) => rowFor(t).node));
+    hint.hidden = chosen.size > 0; totals.hidden = chosen.size === 0;
+    calc();
+  }
+  function reset() { // clears weights and selections; saved rates stay so the next calculation starts quickly
+    chosen.clear(); rows.forEach((r) => { r.kg.value = ''; }); msg.textContent = ''; paint();
+  }
+  function seed(list) { // carries the types and KG already typed in the record into an empty calculator
+    if (chosen.size || !list.length) return;
+    list.forEach((i) => { chosen.add(i.type); rowFor(i.type).kg.value = i.kg; }); paint();
+  }
+  function use() {
+    msg.textContent = '';
+    if (!chosen.size) { msg.textContent = 'Select a plastic type first.'; return; }
+    const items = []; let amountKobo = 0;
+    for (const t of PLASTICS.filter((x) => chosen.has(x))) {
+      const r = rows.get(t), m = toMilli(r.kg.value), k = toKobo(r.rate.value);
+      if (!m) { msg.textContent = `Enter a KG amount above zero for ${t}.`; r.kg.focus(); return; }
+      if (!k) { msg.textContent = `Enter a rate per KG for ${t}.`; r.rate.focus(); return; }
+      items.push({ type: t, kg: plainKg(m) }); amountKobo += Math.round(m * k / 1000);
+    }
+    onUse({ items, amountKobo });
+  }
+  rowsEl.addEventListener('input', () => { msg.textContent = ''; calc(); });
+  const node = h('div', {}, chipsEl, hint, rowsEl, totals, msg,
+    h('div', { class: 'actions' }, h('button', { type: 'button', onclick: reset }, 'Reset'), onUse ? h('button', { type: 'button', class: 'primary', onclick: use }, 'Use in record') : null));
+  // Enter inside the calculator must never submit the record form it sits in
+  node.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); });
+  paint();
+  return { node, seed, reset };
+}
+function openCalculator() {
+  const panel = calcPanel();
+  const d = dialog(h('h2', {}, 'SweepTrack Calculator'),
+    h('div', { class: 'hint' }, 'Manual tool only. Nothing here is saved as a record. Rates are remembered on this device.'),
+    h('label', {}, 'Plastic type'), panel.node,
+    h('div', { class: 'actions' }, h('button', { type: 'button', onclick: () => d.close() }, 'Close')));
+}
 function openSettings() {
   const info = h('dl'), err = h('div', { class: 'err' });
   api('/api/me').then((me) => info.replaceChildren(
