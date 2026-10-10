@@ -1,4 +1,6 @@
 'use strict';
+// ===== EDIT THIS: the address of your SweepTrack Worker (the API), with https:// and no slash at the end =====
+const API_URL = 'https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev';
 const app = document.getElementById('app');
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in the device's local time
 const state = { mode: 'recent', date: today(), from: '', to: '', q: '', records: [], cursor: null };
@@ -31,8 +33,8 @@ const isPending = (r) => /pending/i.test(r);
 async function api(path, { method = 'GET', body } = {}) {
   let res;
   try {
-    res = await fetch(path, {
-      method, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
+    res = await fetch(API_URL + path, {
+      method, credentials: 'include', body: body ? JSON.stringify(body) : undefined,
       headers: { 'X-Requested-With': 'sweep', ...(body ? { 'content-type': 'application/json' } : {}) },
     });
   } catch { throw new Error('Cannot reach the server. Nothing was changed.'); }
@@ -108,7 +110,7 @@ function questionPicker() {
 }
 async function showAuth() {
   let setup = false;
-  try { setup = (await (await fetch('/api/auth/status')).json()).setup_needed; } catch {}
+  try { setup = (await (await fetch(API_URL + '/api/auth/status', { credentials: 'include' })).json()).setup_needed; } catch {}
   setup ? showSignup() : showLogin();
 }
 const authForm = (title, sub, onsubmit, ...kids) => h('form', { class: 'login', onsubmit },
@@ -1004,7 +1006,7 @@ function openSettings() {
 async function exportCsv(params) {
   toast('Preparing CSV...');
   try {
-    const res = await fetch('/api/export?' + params, { credentials: 'same-origin', headers: { 'X-Requested-With': 'sweep' } });
+    const res = await fetch(API_URL + '/api/export?' + params, { credentials: 'include', headers: { 'X-Requested-With': 'sweep' } });
     if (res.status === 401) { showAuth(); throw new Error('Session expired. Please sign in again.'); }
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Server error.');
     const blob = await res.blob(); // rejects if the stream was cut short, so a partial file is never presented as complete
@@ -1017,4 +1019,6 @@ async function exportCsv(params) {
 
 // ---------- start ----------
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-api('/api/me').then(() => showApp()).catch(() => { if (!document.querySelector('.login')) showAuth(); });
+if (API_URL.includes('YOUR-WORKER')) { // the address above has not been filled in yet
+  app.replaceChildren(h('div', { class: 'lockbox' }, h('h3', {}, 'One more step'), h('div', { class: 'hint' }, 'Open app.js and replace the Worker address at the top (API_URL) with the address of your SweepTrack Worker.')));
+} else api('/api/me').then(() => showApp()).catch(() => { if (!document.querySelector('.login')) showAuth(); });

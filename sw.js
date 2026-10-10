@@ -1,5 +1,5 @@
 // Caches the app shell only. API calls are never cached or queued, so a save is only ever confirmed by the server.
-const CACHE = 'sweep-shell-v1';
+const CACHE = 'sweep-shell-v2';
 const SHELL = ['/', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
