@@ -1,4 +1,4 @@
-const API_URL = 'https://sweeptrack-api.sweep-a4a.workers.dev/';
+const API_URL = 'https://sweeptrack-api.sweep-a4a.workers.dev';
 const app = document.getElementById('app');
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in the device's local time
 const state = { mode: 'recent', date: today(), from: '', to: '', q: '', records: [], cursor: null };
